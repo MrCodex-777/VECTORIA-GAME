@@ -144,14 +144,18 @@ class ConsolaCalibracion(Interactable):
     """Terminal dieléctrica: muestra la ecuación de la máquina, nunca la
     respuesta. Flechas <-/> ajustan L (m) o k (N/m). Se abre/cierra con E."""
 
-    PASO_L = 0.4        # metros por pulsación
-    PASO_K = 120.0      # N/m por pulsación
+    PASO_L = 0.4        # metros por pulsación (gruesa)
+    PASO_K = 237.0      # N/m ≈ 5 % de k objetivo (T=2 s, m=120 kg)
 
     def __init__(self, x, y, maquina: MaquinaOscilante, objetivo_T: float,
                  nota: str = ""):
         super().__init__(x, y)
         self.maquina = maquina
         self.objetivo_T = objetivo_T
+        if not self.es_pendulo:
+            # El paso de k se deriva de la meta del diseñador: T = 2π√(m/k)
+            k_obj = maquina.osc.masa * (2.0 * math.pi / objetivo_T) ** 2
+            self.PASO_K = max(1.0, round(0.05 * k_obj))
         self.nota = nota
         self.abierta = False
         self.mensaje = ""
@@ -161,19 +165,25 @@ class ConsolaCalibracion(Interactable):
     def es_pendulo(self) -> bool:
         return isinstance(self.maquina, PenduloMaquina)
 
-    def ajustar(self, signo: int) -> None:
-        """Ajuste con dos pasos: grueso (flechas) y fino (W/S). Garantiza
-        que la tolerancia ±7% sea alcanzable desde cualquier valor inicial."""
-        teclas = pygame.key.get_pressed()
-        fino = bool(teclas[pygame.K_UP] or teclas[pygame.K_w])
-        grueso = bool(teclas[pygame.K_DOWN] or teclas[pygame.K_s])
+    def ajustar(self, signo: int, multiplicador: float | None = None) -> None:
+        """Ajuste con dos pasos: grueso (flechas ↑↓) y fino (W/S).
+
+        ``multiplicador`` permite forzar el modo sin leer el teclado
+        (usado por las pruebas headless; en juego se autodetecta).
+        Garantiza que la tolerancia ±7% sea alcanzable desde cualquier
+        valor inicial: PASO_K = 5 % de k objetivo ⇒ máximo ~2 pulsaciones
+        gruesas dentro de rango.
+        """
+        if multiplicador is None:
+            teclas = pygame.key.get_pressed()
+            fino = bool(teclas[pygame.K_UP] or teclas[pygame.K_w])
+            grueso = bool(teclas[pygame.K_DOWN] or teclas[pygame.K_s])
+            multiplicador = 0.1 if fino else (3.0 if grueso else 1.0)
         if self.es_pendulo:
-            mult = 0.1 if fino else (3.0 if grueso else 1.0)
-            val = self.maquina.osc.longitud + signo * self.PASO_L * mult
+            val = self.maquina.osc.longitud + signo * self.PASO_L * multiplicador
             self.maquina.set_longitud(val)
         else:
-            mult = 0.1 if fino else (3.0 if grueso else 1.0)
-            val = self.maquina.osc.k + signo * self.PASO_K * mult
+            val = self.maquina.osc.k + signo * self.PASO_K * multiplicador
             self.maquina.set_k(val)
 
     def accion(self, player, level) -> None:
