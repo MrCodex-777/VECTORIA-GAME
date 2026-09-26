@@ -34,6 +34,9 @@ def main():
         if level.estado == "VICTORIA":
             pygame.time.wait(3500)
             corriendo = False
+    from src.gfx.pixelart import clear_tex_cache, SpriteBank
+    clear_tex_cache()
+    SpriteBank.clear_cache()
     pygame.quit()
 
 

@@ -58,17 +58,48 @@ class PhysicsBody(Entity):
 
 
 class Solid(PhysicsBody):
-    """Plataforma/muro estático colisionable. ``peligroso=True`` mata al tocar."""
+    """Plataforma/muro estático colisionable. ``peligroso=True`` mata al tocar.
 
-    def __init__(self, x, y, w, h, color=(90, 100, 95), peligroso=False):
+    Render pixel-art: textura determinista por tipo ('bosque', 'metal',
+    'hormigon', 'peligro') generada una sola vez y cacheada, con borde
+    oscuro y highlight superior alineados a la retícula de 2 px.
+    """
+
+    def __init__(self, x, y, w, h, color=(90, 100, 95), peligroso=False,
+                 textura: str | None = None):
         super().__init__(x, y, w, h)
         self.gravedad = False
         self.color = color
         self.peligroso = peligroso
+        if textura is None:
+            textura = "peligro" if peligroso else "bosque"
+        self.textura = textura
+        self._semilla_tex = int(self.pos.x * 13 + self.pos.y * 7 + w * 3 + h)
+        self._tex: pygame.Surface | None = None
+
+    @property
+    def plataforma_rect(self):
+        return self.rect
+
+    def _textura_surf(self):
+        if self._tex is None:
+            from src.gfx.pixelart import solid_texture
+            w, h = self.size
+            self._tex = solid_texture(self.textura, w, h, seed=self._semilla_tex)
+        return self._tex
 
     def draw(self, surf, cam):
-        pygame.draw.rect(surf, self.color, cam.to_screen(self.rect))
-        pygame.draw.rect(surf, (40, 48, 44), cam.to_screen(self.rect), 2)
+        r = cam.to_screen(self.rect)
+        if r.right < 0 or r.left > surf.get_width():
+            return                                   # culling por cámara
+        tex = self._textura_surf()
+        surf.blit(tex, (r.x, r.y))
+        from src.gfx.pixelart import line_px, color as pc
+        line_px(surf, (18, 22, 20), (r.x, r.bottom - 2), (r.right, r.bottom - 2))
+        line_px(surf, (18, 22, 20), (r.x, r.y), (r.x, r.bottom))
+        line_px(surf, (18, 22, 20), (r.right - 2, r.y), (r.right - 2, r.bottom))
+        top_brillo = pc("E") if self.textura == "bosque" else pc("M")
+        line_px(surf, top_brillo, (r.x + 2, r.y + 2), (r.right - 4, r.y + 2))
 
 
 class Interactable(Entity):

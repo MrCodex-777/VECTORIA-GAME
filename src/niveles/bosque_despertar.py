@@ -153,18 +153,13 @@ class BosqueDespertar(Level):
                 self.avisar("NODO T-900 SINCRONIZADO — LA GRÚA RESPONDE A TI")
 
     # ------------------------------------------------------------- estética
+    def __init__(self, surface):
+        super().__init__(surface)
+        from src.gfx.parallax import ParallaxBosque
+        self.fondo = ParallaxBosque(surface)
+
     def dibujar_fondo(self):
-        s = self.surface
-        w, h = s.get_size()
-        s.fill((16, 26, 24))
-        # niebla verde: dos capas de siluetas con parallax (0.15x y 0.35x)
-        for vel, col, alto in ((0.15, (24, 42, 34), 300), (0.35, (32, 54, 42), 210)):
-            ox = int(-(self.camara.x * vel)) % 230
-            for j in range(-1, w // 230 + 2):
-                px = j * 230 - ox
-                pygame.draw.rect(s, col, (px, h - alto - 40, 90, alto))
-        # raíces/vegetación sobre estructuras (ruina orgánica)
-        pygame.draw.rect(s, (20, 34, 26), (0, h - 40, w, 40))
+        self.fondo.draw(self.camara.x, self.reloj)
 
     def _draw_victoria(self, s):
         fb = pygame.font.SysFont("monospace", 22)
