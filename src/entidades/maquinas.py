@@ -19,6 +19,8 @@ import pygame
 
 from src.fisicas.mas import PenduloIndustrial, ResortePlataforma, G_EARTH
 from .base import Entity, Interactable, Solid
+from src.gfx.pixelart import (SpriteBank, solid_texture, px, rect_px, line_px,
+                              circle_px, color as pc, PX_PX)
 
 ESCALA = 40.0          # píxeles por metro (nivel Bosque)
 TOLERANCIA = 0.07      # ±7% sobre el periodo objetivo — rango, no examen
@@ -86,17 +88,38 @@ class PenduloMaquina(MaquinaOscilante):
     def draw(self, surf, cam):
         pv = cam.to_world_to_screen(self.pos)
         r = cam.to_screen(self._rect)
-        pygame.draw.line(surf, (150, 150, 140), pv, r.center, 2)      # cable
-        pygame.draw.circle(surf, (90, 90, 88), pv, 6)                 # pivote
-        pygame.draw.rect(surf, (120, 132, 118), r, border_radius=3)   # plataforma
-        pygame.draw.rect(surf, (60, 200, 210), (r.x, r.y, r.w, 3))    # franja HUD
-        # vector velocidad tangencial (diegético: la física se ve, no se explica)
-        v = self.osc.estado(self.osc.tiempo)[1]                        # dθ/dt
+        if r.right < -80 or r.left > surf.get_width() + 80:
+            return
+        # --- mástil/viga superior del galpón (pixel art, retícula 2px)
+        rect_px(surf, (56, 62, 60), pv[0] - 30, pv[1] - 18, 60, 14)
+        rect_px(surf, pc("M"), pv[0] - 30, pv[1] - 18, 60, 2)
+        rect_px(surf, (70, 78, 74), pv[0] - 6, pv[1] - 4, 12, 8)   # carcasa
+        # --- cable: segmentos de 2 px a lo largo de la cuerda (no línea lisa)
+        n_seg = max(4, int(self.largo_px / 8))
+        for i in range(n_seg):
+            f0, f1 = i / n_seg, (i + 1) / n_seg
+            x0 = pv[0] + (r.centerx - pv[0]) * f0
+            y0 = pv[1] + (r.top + self.bob_h // 2 - pv[1]) * f0
+            x1 = pv[0] + (r.centerx - pv[0]) * f1
+            y1 = pv[0] * 0 + pv[1] + (r.top + self.bob_h // 2 - pv[1]) * f1
+            line_px(surf, (170, 170, 160), (x0, y0), (x1, y1))
+        circle_px(surf, (90, 90, 88), pv, 6)                       # pivote
+        # --- plataforma-grúa: chapa + franja HUD + ganchos
+        tex = solid_texture("metal", r.w, r.h, seed=int(self.pos.x))
+        surf.blit(tex, (r.x, r.y))
+        rect_px(surf, pc("g"), r.x, r.y, r.w, 3)                   # franja HUD
+        rect_px(surf, (30, 36, 34), r.x, r.bottom - 2, r.w, 2)     # sombra base
+        for gx in (r.x + 6, r.right - 8):                          # ganchos laterales
+            rect_px(surf, (120, 124, 120), gx, r.bottom, PX_PX, 4)
+        # --- vector velocidad tangencial (diegético: la física se ve)
+        v = self.osc.estado(self.osc.tiempo)[1]
         vx = math.cos(self.theta) * v * self.largo_px / ESCALA
         fin = (r.centerx + int(vx * 4), r.centery - 24)
-        pygame.draw.line(surf, (255, 150, 110), (r.centerx, r.centery - 24), fin, 2)
+        line_px(surf, (255, 150, 110), (r.centerx, r.centery - 24), fin)
         dx = fin[0] - r.centerx
-        pygame.draw.line(surf, (255, 150, 110), fin, (fin[0] - int(0.7*abs(dx)) - 3 if dx>0 else fin[0] + 3, fin[1] + 5), 2)
+        punta_x = fin[0] - 6 if dx > 0 else fin[0] + 6
+        line_px(surf, (255, 150, 110), fin, (punta_x, fin[1] + 4))
+        line_px(surf, (255, 150, 110), fin, (punta_x, fin[1] - 4))
 
 
 class ResorteMaquina(MaquinaOscilante):
@@ -127,17 +150,32 @@ class ResorteMaquina(MaquinaOscilante):
     def draw(self, surf, cam):
         base = cam.to_world_to_screen(self.pos)
         r = cam.to_screen(self._rect)
-        top = r.midtop
-        n = 7
-        for i in range(n):                      # muelle en zigzag
+        if r.right < -80 or r.left > surf.get_width() + 80:
+            return
+        top = (r.centerx, r.bottom)
+        # --- base anclada al suelo: placa con tornillos
+        rect_px(surf, (60, 66, 64), base[0] - 22, base[1] - 6, 44, 8)
+        for tx in (-16, 12):
+            rect_px(surf, pc("M"), base[0] + tx, base[1] - 4, PX_PX, PX_PX)
+        # --- muelle helicoidal en zigzag pixelado (espiras que se comprimen)
+        n = 9
+        alto_total = max(PX_PX * 2, base[1] - top[1])
+        ancho_var = 12 + int(6 * (alto_total / max(1.0, self.amplitud_px * 2)))
+        for i in range(n):
             f0, f1 = i / n, (i + 1) / n
-            p0 = (base[0] + (1 - 4 * ((i % 2))) * 10 * (1 - f0),
-                  base[1] + (top[1] - base[1]) * f0)
-            p1 = (base[0] + (1 - 4 * ((i % 2))) * 10 * (1 - f1),
-                  base[1] + (top[1] - base[1]) * f1)
-            pygame.draw.line(surf, (170, 170, 160), p0, p1, 2)
-        pygame.draw.rect(surf, (120, 132, 118), r, border_radius=3)
-        pygame.draw.rect(surf, (60, 200, 210), (r.x, r.y, r.w, 3))
+            x_off0 = ancho_var if i % 2 == 0 else -ancho_var
+            x_off1 = ancho_var if (i + 1) % 2 == 0 else -ancho_var
+            p0 = (base[0] + x_off0 * (1 - f0), base[1] - alto_total * f0)
+            p1 = (base[0] + x_off1 * (1 - f1), base[1] - alto_total * f1)
+            line_px(surf, (176, 182, 176), p0, p1)
+            line_px(surf, (96, 102, 98), (p0[0], p0[1] + 2), (p1[0], p1[1] + 2))
+        # --- plataforma: chapa metálica + franja HUD + reborde
+        tex = solid_texture("metal", r.w, r.h, seed=int(self.pos.x) + 5)
+        surf.blit(tex, (r.x, r.y))
+        rect_px(surf, pc("g"), r.x, r.y, r.w, 3)
+        rect_px(surf, (30, 36, 34), r.x, r.bottom - 2, r.w, 2)
+        rect_px(surf, (40, 46, 44), r.x, r.y, 2, r.h)
+        rect_px(surf, (40, 46, 44), r.right - 2, r.y, 2, r.h)
 
 
 class ConsolaCalibracion(Interactable):
