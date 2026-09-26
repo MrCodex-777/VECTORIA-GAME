@@ -34,12 +34,13 @@ def test_pipeline_nivel():
     assert lvl.estado == "REGISTRO"
     lvl.manejar_evento(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_e))
     assert lvl.estado == "JUGANDO"
-    # calibración por consola (debajo del capó, pero vía API pública ajustar())
+    # calibración por consola (debajo del capó, pero vía API pública ajustar();
+    # multiplicador=3.0 = modo "grueso", sin depender del teclado real)
     for c in (lvl.consola1, lvl.consola2, lvl.consola3):
-        for _ in range(2000):
+        for _ in range(200):
             if c.maquina.es_calibrada(c.objetivo_T): break
             err = (c.maquina.periodo - c.objetivo_T)/c.objetivo_T
-            c.ajustar(-1 if err > 0 else 1)
+            c.ajustar(-1 if err > 0 else 1, multiplicador=3.0)
         assert c.maquina.es_calibrada(c.objetivo_T), c.objetivo_T
     # 120 s de simulación con el jugador quieto sobre plataforma: sin crashes
     for i in range(60*120):

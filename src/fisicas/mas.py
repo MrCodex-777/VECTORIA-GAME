@@ -76,8 +76,10 @@ class OsciladorArmonico:
 
     def _ensure_solution(self) -> None:
         if self._sol is None:
-            # Ventana de integración corta (≈10 periodos): suficiente para el
-            # juego y barato en CPU. Se regenera sola al pasar el horizonte.
+            # Ventana de integración ≈10 periodos: suficiente para el juego.
+            # Tolerancias ajustadas: el MAS lineal con DOP853 no necesita
+            # 1e-11; con 1e-8/1e-10 la ventana se resuelve ~4x más rápido
+            # sin error perceptible (el jugador trabaja con ±7%).
             self._horizon = max(20.0, 10.0 * self.periodo)
             self._sol = solve_ivp(
                 self._rhs,
@@ -85,16 +87,25 @@ class OsciladorArmonico:
                 [self.x0, self.v0],
                 method="DOP853",
                 dense_output=True,
-                rtol=1e-9,
-                atol=1e-11,
+                rtol=1e-8,
+                atol=1e-10,
             )
 
     def estado(self, t: float) -> tuple[float, float]:
-        """Devuelve (posición, velocidad) en el tiempo absoluto t."""
+        """Devuelve (posición, velocidad) en el tiempo absoluto t.
+
+        Si la ventana de integración se agota, NO se descarta el trabajo:
+        las condiciones iniciales del tramo siguiente son el estado físico
+        real en el borde de la ventana (continuidad de x y v). Antes se
+        reiniciaba en (x0, v0), lo que producía un salto visible y obligaba
+        a re-integrar desde cero.
+        """
         self._ensure_solution()
         while t >= self._horizon:          # ventana agotada → extender reloj
+            xb, vb = (float(a) for a in self._sol.sol(self._horizon))
             t -= self._horizon
             self._t -= self._horizon
+            self.x0, self.v0 = xb, vb      # continuar desde el estado real
             self._sol = None
             self._ensure_solution()
         x, v = self._sol.sol(t)
